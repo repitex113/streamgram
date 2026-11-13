@@ -842,20 +842,23 @@ export class TelegramNestService {
     }
 
     const processTitle = (title?: string | null) => {
-      if (!title) return;
-      const parsed = this.parseComplexTitlePattern(title);
-      title = this.prepareSearchTitle(title);
-      if (parsed) {
-        parsed.map((part) => this.prepareSearchTitle(part)).forEach(addUnique);
-      } else {
-        addUnique(title);
-      }
+  if (!title) return;
+  const parsed = this.parseComplexTitlePattern(title);
+  title = this.prepareSearchTitle(title);
 
-      if (media.year) {
-        const titleWithYear = `${title} ${media.year}`;
-        addUnique(titleWithYear);
-      }
-    };
+  // STRICT SEARCH: If the media has a year, ONLY search using the title + year. 
+  // This completely stops Telegram from fetching loose single-word matches.
+  if (media.year) {
+    const titleWithYear = `${title} ${media.year}`;
+    addUnique(titleWithYear);
+  } else {
+    if (parsed) {
+      parsed.map((part) => this.prepareSearchTitle(part)).forEach(addUnique);
+    } else {
+      addUnique(title);
+    }
+  }
+};
 
     // Process first part of localized title if it contains split symbols
     if (localizedTitle) {
