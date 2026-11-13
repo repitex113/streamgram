@@ -1542,35 +1542,47 @@ export class TelegramNestService {
         }
         
         if (isMatch) {
-          // Episode Title Protection: Only apply for TV Series
-          if (media.episodeInfo) {
-            let appearsAfterTags = false;
-            for (let k = 0; k < i; k++) {
-              const isTag = /^(?:\d+|s\d+|e\d+|s\d+e\d+|\d{3,4}p|4k|x264|x265|hevc|h264|bluray|web|webdl|hdtv|mkv|mp4|avi|season|episode|ep|part|vol|chapter|cour)$/i.test(words[k]);
-              if (isTag) {
-                appearsAfterTags = true;
-                break;
+              let appearsAfterTags = false;
+              
+              // Check if this is an episode title appearing after season/episode codes
+              if (media.episodeInfo) {
+                for (let k = 0; k < i; k++) {
+                  if (/^(?:s\d+|e\d+|s\d+e\d+|season|episode|ep)$/i.test(words[k])) {
+                    appearsAfterTags = true;
+                    break;
+                  }
+                }
               }
-            }
-            if (appearsAfterTags) continue;
-          }
 
-          // Strict Prefix Check
-          const prevWord = i > 0 ? words[i - 1] : null;
-          if (prevWord && !/^(?:the|a|an)$/i.test(prevWord)) continue;
-          
-          // Strict Suffix Check
-          const nextWord = words[i + targetWords.length];
-          if (nextWord) {
-            const isNumber = /^\d+$/.test(nextWord);
-            const isEpisodeCode = /^[se]\d+(?:e\d+)?$/i.test(nextWord);
-            const isTag = /^(?:1080p|720p|480p|2160p|4k|x264|x265|hevc|h264|10bit|8bit|bluray|bdrip|brrip|web|webdl|webrip|hdtv|tv|dvd|dvdrip|mkv|mp4|avi|wmv|dual|audio|multi|sub|subs|subbed|dub|dubbed|eng|hindi|jap|complete|batch|uncensored|raw|season|episode|ep|ova|part|vol|chapter|cour|amzn|nf|dsnp|s|e|movie|www)$/i.test(nextWord);
-            
-            if (!isNumber && !isEpisodeCode && !isTag) continue; 
-          }
-          
-          return true;
-        }
+              // STRICT PREFIX CHECK: Ensure NO random words exist before the title
+              if (i > 0) {
+                let hasInvalidPrefix = false;
+                for (let p = 0; p < i; p++) {
+                  // Allow standard articles before the title, but nothing else
+                  if (!/^(?:the|a|an)$/i.test(words[p])) {
+                    hasInvalidPrefix = true;
+                    break;
+                  }
+                }
+                
+                // Reject files that have extra words before the title (like "Scooby Doo and")
+                if (hasInvalidPrefix && !appearsAfterTags) {
+                  continue; 
+                }
+              }
+              
+              // STRICT SUFFIX CHECK: Ensure the title isn't bleeding into another word
+              const nextWord = words[i + targetWords.length];
+              if (nextWord && !appearsAfterTags) {
+                const isNumber = /^\d+$/.test(nextWord);
+                const isEpisodeCode = /^[se]\d+(?:e\d+)?$/i.test(nextWord);
+                const isTag = /^(?:1080p|720p|480p|2160p|4k|x264|x265|hevc|h264|10bit|8bit|bluray|bdrip|brrip|web|webdl|webrip|hdtv|tv|dvd|dvdrip|mkv|mp4|avi|wmv|dual|audio|multi|sub|subs|subbed|dub|dubbed|eng|hindi|jap|complete|batch|uncensored|raw|season|episode|ep|ova|part|vol|chapter|cour|amzn|nf|dsnp|s|e|movie|www)$/i.test(nextWord);
+                
+                if (!isNumber && !isEpisodeCode && !isTag) continue; 
+              }
+              
+              return true;
+            }
       }
       return false;
     };
