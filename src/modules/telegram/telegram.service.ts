@@ -2163,15 +2163,6 @@ export class TelegramNestService {
       finalResults.push(...remaining.slice(0, remainingSlots));
     }
 
-    // If still not enough, add partial matches
-    if (finalResults.length < targetResultCount) {
-      partialMatches.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-      const remainingSlots = targetResultCount - finalResults.length;
-      finalResults = finalResults.concat(
-        partialMatches.slice(0, remainingSlots),
-      );
-    }
-
     // Final sort by score
     finalResults.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
@@ -2180,7 +2171,7 @@ export class TelegramNestService {
     // Searches can swallow individual failures; never cache their incomplete
     // output if the shared client was invalidated during the search.
     this.clientManager.assertClientUsable(client);
-    await this.cache.setSearchResults(user.token, cacheKey, limited);
+   return limited;
     logger.info(
       {
         cacheKey,
