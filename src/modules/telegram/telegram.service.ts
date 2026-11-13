@@ -1553,8 +1553,10 @@ export class TelegramNestService {
     // Treat filename separators like spaces when comparing series titles.
     const normalizedText = ` ${this.normalizeSearchText(fullText)} `;
     const titleMatches = (title: string | null): boolean => {
-      const normalized = title ? this.normalizeSearchText(title) : "";
-      return Boolean(normalized && normalizedText.includes(` ${normalized} `));
+      if (!title) return false;
+      const escapedTitle = this.escapeRegex(title.toLowerCase());
+      const strictRegex = new RegExp(`(?:^|[ ._-])${escapedTitle}(?:[ ._-]|$)`, 'i');
+      return strictRegex.test(fullText);
     };
     const hasTitle =
       titleMatches(baseTitle) ||
