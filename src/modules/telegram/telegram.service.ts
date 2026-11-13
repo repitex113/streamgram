@@ -1574,25 +1574,42 @@ export class TelegramNestService {
           }
         }
         
-        // 4. If the title matches, verify the surrounding words to block similar titles
+        // 4. Verify it's the SHOW title and not an EPISODE title
         if (isMatch) {
+          // 4a. Check if the matched title appears AFTER media tags. 
+          // If we see a season, episode, year, or resolution BEFORE the title, it's an episode title!
+          let appearsAfterTags = false;
+          for (let k = 0; k < i; k++) {
+            const isTag = /^(?:\d+|s\d+|e\d+|s\d+e\d+|\d{3,4}p|4k|x264|x265|hevc|h264|bluray|web|webdl|hdtv|mkv|mp4|avi|season|episode|ep|part|vol|chapter|cour)$/i.test(words[k]);
+            if (isTag) {
+              appearsAfterTags = true;
+              break;
+            }
+          }
+          if (appearsAfterTags) {
+            continue; // Skip, this is matching an episode name
+          }
+
+          // 4b. Check the preceding word. We strictly reject longer titles (like "Re:Monster")
           const prevWord = i > 0 ? words[i - 1] : null;
-          const nextWord = words[i + targetWords.length];
-          
-          // Reject if the preceding word is part of a longer title (e.g., "Re:Monster" or "The Monster")
-          if (prevWord && /^(?:re|the|a|an)$/i.test(prevWord)) {
-            continue;
+          if (prevWord) {
+            // We only allow harmless structural prefixes. If it's anything else, it's a different show.
+            const isAllowedPrefix = /^(?:the|a|an)$/i.test(prevWord);
+            if (!isAllowedPrefix) {
+              continue; 
+            }
           }
           
-          // Reject if the following word is a standard English word (e.g., "Monster Musume", "Monster Dahmer")
-          // We strictly ALLOW numbers (years/episodes), season codes, and standard video tags
+          // 4c. Check the following word. We strictly reject longer titles (like "Monster Musume")
+          const nextWord = words[i + targetWords.length];
           if (nextWord) {
             const isNumber = /^\d+$/.test(nextWord);
             const isEpisodeCode = /^[se]\d+(?:e\d+)?$/i.test(nextWord);
             const isTag = /^(?:1080p|720p|480p|2160p|4k|x264|x265|hevc|h264|10bit|8bit|bluray|bdrip|brrip|web|webdl|webrip|hdtv|tv|dvd|dvdrip|mkv|mp4|avi|wmv|dual|audio|multi|sub|subs|subbed|dub|dubbed|eng|hindi|jap|complete|batch|uncensored|raw|season|episode|ep|ova|part|vol|chapter|cour|amzn|nf|dsnp|s|e|movie|www)$/i.test(nextWord);
             
+            // If the next word isn't a media tag or episode code, it's a different show.
             if (!isNumber && !isEpisodeCode && !isTag) {
-              continue; // It's a longer mismatched title, keep searching the string
+              continue; 
             }
           }
           
