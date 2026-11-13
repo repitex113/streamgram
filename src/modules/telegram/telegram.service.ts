@@ -1554,9 +1554,52 @@ export class TelegramNestService {
     const normalizedText = ` ${this.normalizeSearchText(fullText)} `;
     const titleMatches = (title: string | null): boolean => {
       if (!title) return false;
-      const escapedTitle = this.escapeRegex(title.toLowerCase());
-      const strictRegex = new RegExp(`(?:^|[ ._-])${escapedTitle}(?:[ ._-]|$)`, 'i');
-      return strictRegex.test(fullText);
+      
+      // 1. Clean the text: remove bracketed tags which confuse word boundaries
+      const cleanText = fullText.replace(/\[.*?\]|\(.*?\)/g, ' ');
+      
+      // 2. Split both texts into arrays of words
+      const words = cleanText.split(/[ \W_]+/).filter(w => w.length > 0);
+      const targetWords = title.toLowerCase().split(/[ \W_]+/).filter(w => w.length > 0);
+      
+      if (targetWords.length === 0) return false;
+      
+      // 3. Search for the exact sequence of title words
+      for (let i = 0; i <= words.length - targetWords.length; i++) {
+        let isMatch = true;
+        for (let j = 0; j < targetWords.length; j++) {
+          if (words[i + j] !== targetWords[j]) {
+            isMatch = false;
+            break;
+          }
+        }
+        
+        // 4. If the title matches, verify the surrounding words to block similar titles
+        if (isMatch) {
+          const prevWord = i > 0 ? words[i - 1] : null;
+          const nextWord = words[i + targetWords.length];
+          
+          // Reject if the preceding word is part of a longer title (e.g., "Re:Monster" or "The Monster")
+          if (prevWord && /^(?:re|the|a|an)$/i.test(prevWord)) {
+            continue;
+          }
+          
+          // Reject if the following word is a standard English word (e.g., "Monster Musume", "Monster Dahmer")
+          // We strictly ALLOW numbers (years/episodes), season codes, and standard video tags
+          if (nextWord) {
+            const isNumber = /^\d+$/.test(nextWord);
+            const isEpisodeCode = /^[se]\d+(?:e\d+)?$/i.test(nextWord);
+            const isTag = /^(?:1080p|720p|480p|2160p|4k|x264|x265|hevc|h264|10bit|8bit|bluray|bdrip|brrip|web|webdl|webrip|hdtv|tv|dvd|dvdrip|mkv|mp4|avi|wmv|dual|audio|multi|sub|subs|subbed|dub|dubbed|eng|hindi|jap|complete|batch|uncensored|raw|season|episode|ep|ova|part|vol|chapter|cour|amzn|nf|dsnp|s|e|movie|www)$/i.test(nextWord);
+            
+            if (!isNumber && !isEpisodeCode && !isTag) {
+              continue; // It's a longer mismatched title, keep searching the string
+            }
+          }
+          
+          return true;
+        }
+      }
+      return false;
     };
     const hasTitle =
       titleMatches(baseTitle) ||
