@@ -1630,6 +1630,21 @@ export class TelegramNestService {
       return false;
     }
 
+    // --- EXACT YEAR MATCHING LOGIC (STRICT MODE) ---
+    if (media.year) {
+      const yearRegex = /(?:^|[^\d])(19\d{2}|20\d{2})(?:[^\d]|$)/g;
+      const foundYears = [...fullText.matchAll(yearRegex)].map(m => Number(m[1]));
+      
+      if (foundYears.length > 0) {
+        if (!foundYears.includes(media.year)) {
+          return false; // Rejects files with the wrong year
+        }
+      } else {
+        // STRICT MODE ENABLED: Rejects files that have no year at all
+        return false; 
+      }
+    }
+
     return this.matchesSeasonEpisode(fullText, media.episodeInfo);
   }
 
