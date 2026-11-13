@@ -1514,57 +1514,21 @@ export class TelegramNestService {
       return true;
     }
 
-    //for hebrew and similar languages, ignore nikud and other diacritics for matching purposes
+    // For Hebrew and similar languages, ignore nikud and other diacritics
     baseTitle = baseTitle.replace(/[\u0591-\u05C7]/g, "").toLowerCase();
     const normalizedTitle = media.title.replace(/[\u0591-\u05C7]/g, "").toLowerCase();
-    if (!media.episodeInfo) {
-      // For movies, just check if title is mentioned
-      const fullText = `${result.fileName || ""} ${result.caption || ""}`
-        .toLowerCase()
-        .replace(/_/g, " ");
+    const fullText = `${result.fileName || ""} ${result.caption || ""}`.toLowerCase();
 
-      // Check full titles
-      if (fullText.includes(baseTitle) || fullText.includes(normalizedTitle)) {
-        return true;
-      }
-
-      // Check first part of titles if they contain split symbols
-      const baseTitleFirstPart = this.extractTitleFirstPart(baseTitle);
-      if (baseTitleFirstPart && fullText.includes(baseTitleFirstPart)) {
-        return true;
-      }
-
-      const mediaTitleFirstPart = this.extractTitleFirstPart(normalizedTitle);
-      if (mediaTitleFirstPart && fullText.includes(mediaTitleFirstPart)) {
-        return true;
-      }
-
-      const normalizedText = ` ${this.normalizeSearchText(fullText)} `;
-      return [baseTitle, normalizedTitle].some((title) => {
-        const prepared = this.normalizeSearchText(this.prepareSearchTitle(title));
-        return Boolean(prepared && normalizedText.includes(` ${prepared} `)) ||
-          this.matchesMovieTitleWithPartNumber(normalizedText, this.normalizeSearchText(title));
-      });
-    }
-
-    const fullText = `${result.fileName || ""} ${result.caption || ""}`
-      .toLowerCase()
-      .replace(/_/g, " ");
-    // Treat filename separators like spaces when comparing series titles.
-    const normalizedText = ` ${this.normalizeSearchText(fullText)} `;
+    // UNIFIED STRICT TOKEN PARSER (For both Movies and Series)
     const titleMatches = (title: string | null): boolean => {
       if (!title) return false;
       
-      // 1. Clean the text: remove bracketed tags which confuse word boundaries
       const cleanText = fullText.replace(/\[.*?\]|\(.*?\)/g, ' ');
-      
-      // 2. Split both texts into arrays of words
       const words = cleanText.split(/[ \W_]+/).filter(w => w.length > 0);
       const targetWords = title.toLowerCase().split(/[ \W_]+/).filter(w => w.length > 0);
       
       if (targetWords.length === 0) return false;
       
-      // 3. Search for the exact sequence of title words
       for (let i = 0; i <= words.length - targetWords.length; i++) {
         let isMatch = true;
         for (let j = 0; j < targetWords.length; j++) {
@@ -1574,43 +1538,32 @@ export class TelegramNestService {
           }
         }
         
-        // 4. Verify it's the SHOW title and not an EPISODE title
         if (isMatch) {
-          // 4a. Check if the matched title appears AFTER media tags. 
-          // If we see a season, episode, year, or resolution BEFORE the title, it's an episode title!
-          let appearsAfterTags = false;
-          for (let k = 0; k < i; k++) {
-            const isTag = /^(?:\d+|s\d+|e\d+|s\d+e\d+|\d{3,4}p|4k|x264|x265|hevc|h264|bluray|web|webdl|hdtv|mkv|mp4|avi|season|episode|ep|part|vol|chapter|cour)$/i.test(words[k]);
-            if (isTag) {
-              appearsAfterTags = true;
-              break;
+          // Episode Title Protection: Only apply for TV Series
+          if (media.episodeInfo) {
+            let appearsAfterTags = false;
+            for (let k = 0; k < i; k++) {
+              const isTag = /^(?:\d+|s\d+|e\d+|s\d+e\d+|\d{3,4}p|4k|x264|x265|hevc|h264|bluray|web|webdl|hdtv|mkv|mp4|avi|season|episode|ep|part|vol|chapter|cour)$/i.test(words[k]);
+              if (isTag) {
+                appearsAfterTags = true;
+                break;
+              }
             }
-          }
-          if (appearsAfterTags) {
-            continue; // Skip, this is matching an episode name
+            if (appearsAfterTags) continue;
           }
 
-          // 4b. Check the preceding word. We strictly reject longer titles (like "Re:Monster")
+          // Strict Prefix Check
           const prevWord = i > 0 ? words[i - 1] : null;
-          if (prevWord) {
-            // We only allow harmless structural prefixes. If it's anything else, it's a different show.
-            const isAllowedPrefix = /^(?:the|a|an)$/i.test(prevWord);
-            if (!isAllowedPrefix) {
-              continue; 
-            }
-          }
+          if (prevWord && !/^(?:the|a|an)$/i.test(prevWord)) continue;
           
-          // 4c. Check the following word. We strictly reject longer titles (like "Monster Musume")
+          // Strict Suffix Check
           const nextWord = words[i + targetWords.length];
           if (nextWord) {
             const isNumber = /^\d+$/.test(nextWord);
             const isEpisodeCode = /^[se]\d+(?:e\d+)?$/i.test(nextWord);
             const isTag = /^(?:1080p|720p|480p|2160p|4k|x264|x265|hevc|h264|10bit|8bit|bluray|bdrip|brrip|web|webdl|webrip|hdtv|tv|dvd|dvdrip|mkv|mp4|avi|wmv|dual|audio|multi|sub|subs|subbed|dub|dubbed|eng|hindi|jap|complete|batch|uncensored|raw|season|episode|ep|ova|part|vol|chapter|cour|amzn|nf|dsnp|s|e|movie|www)$/i.test(nextWord);
             
-            // If the next word isn't a media tag or episode code, it's a different show.
-            if (!isNumber && !isEpisodeCode && !isTag) {
-              continue; 
-            }
+            if (!isNumber && !isEpisodeCode && !isTag) continue; 
           }
           
           return true;
@@ -1618,6 +1571,7 @@ export class TelegramNestService {
       }
       return false;
     };
+
     const hasTitle =
       titleMatches(baseTitle) ||
       titleMatches(normalizedTitle) ||
@@ -1630,7 +1584,7 @@ export class TelegramNestService {
       return false;
     }
 
-    // --- EXACT YEAR MATCHING LOGIC (STRICT MODE) ---
+    // --- EXACT YEAR MATCHING LOGIC (STRICT MODE FOR ALL MEDIA) ---
     if (media.year) {
       const yearRegex = /(?:^|[^\d])(19\d{2}|20\d{2})(?:[^\d]|$)/g;
       const foundYears = [...fullText.matchAll(yearRegex)].map(m => Number(m[1]));
@@ -1645,6 +1599,12 @@ export class TelegramNestService {
       }
     }
 
+    // If it is a movie, it has passed the strict title and strict year checks, so we are done
+    if (!media.episodeInfo) {
+      return true;
+    }
+
+    // If it is a series, it must additionally pass the season/episode check
     return this.matchesSeasonEpisode(fullText, media.episodeInfo);
   }
 
